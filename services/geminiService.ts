@@ -50,12 +50,12 @@ export const describeImage = async (imageDataUrl: string): Promise<string> => {
 };
 
 /**
- * Generates an image based on a source image and a text prompt.
+ * Edits an image based on a source image and a text prompt, preserving facial features.
  * @param imageDataUrl The data URL of the source image.
  * @param prompt The text prompt for image generation.
  * @returns A promise that resolves to a base64 encoded data URL of the generated image.
  */
-export const generateImageView = async (imageDataUrl: string, prompt: string): Promise<string> => {
+export const editImageView = async (imageDataUrl: string, prompt: string): Promise<string> => {
     try {
         const imagePart = dataUrlToGeminiPart(imageDataUrl);
         const fullPrompt = `${prompt}. IMPORTANT: The face of the person must remain exactly the same as in the provided image. Do not change the facial features, expression, or identity.`;
@@ -82,8 +82,59 @@ export const generateImageView = async (imageDataUrl: string, prompt: string): P
         const { mimeType, data } = imageCandidatePart.inlineData;
         return `data:${mimeType};base64,${data}`;
         
-    } catch (error) {
+    } catch (error: unknown) {
+        console.error("Error in editImageView:", error);
+        if (error instanceof Error) {
+            try {
+                const apiError = JSON.parse(error.message);
+                if (apiError.error && apiError.error.message) {
+                    throw new Error(apiError.error.message);
+                }
+            } catch (e) {
+                 throw new Error(`API call failed: ${error.message}`);
+            }
+        }
+        throw new Error(`An unknown error occurred during image editing.`);
+    }
+};
+
+
+/**
+ * Generates an image based purely on a text prompt.
+ * @param prompt The text prompt for image generation.
+ * @returns A promise that resolves to a base64 encoded data URL of the generated image.
+ */
+export const generateImageView = async (prompt: string): Promise<string> => {
+    try {
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+                aspectRatio: '1:1',
+            },
+        });
+
+        if (!response.generatedImages || response.generatedImages.length === 0 || !response.generatedImages[0].image.imageBytes) {
+            throw new Error('Image generation failed, no image returned from the model.');
+        }
+
+        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+        return `data:image/png;base64,${base64ImageBytes}`;
+
+    } catch (error: unknown) {
         console.error("Error in generateImageView:", error);
-        throw new Error(`Failed to generate view for prompt: "${prompt}"`);
+        if (error instanceof Error) {
+            try {
+                const apiError = JSON.parse(error.message);
+                if (apiError.error && apiError.error.message) {
+                    throw new Error(apiError.error.message);
+                }
+            } catch (e) {
+                 throw new Error(`API call failed: ${error.message}`);
+            }
+        }
+        throw new Error(`An unknown error occurred during image generation.`);
     }
 };

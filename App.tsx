@@ -4,9 +4,10 @@ import { ImageUploader } from './components/ImageUploader';
 import { GeneratedImagesView } from './components/GeneratedImagesView';
 import { Loader } from './components/Loader';
 import { GeneratedView } from './types';
-import { describeImage, generateImageView } from './services/geminiService';
+import { describeImage, editImageView, generateImageView } from './services/geminiService';
 import { VIEW_TYPES } from './constants';
 import { QuotaManager } from './components/QuotaManager';
+import { ModelSelector } from './components/ModelSelector';
 
 const App: React.FC = () => {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -14,7 +15,9 @@ const App: React.FC = () => {
   const [basePrompt, setBasePrompt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<'analyzing' | 'generating' | null>(null);
+  const [generatingProgress, setGeneratingProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<'edit' | 'generate'>('edit');
 
   // Quota state initialized from localStorage
   const [totalCredits, setTotalCredits] = useState<number>(() => {
@@ -68,36 +71,58 @@ const App: React.FC = () => {
     setGeneratedViews([]);
     setUsedCredits(prev => prev + 1);
 
+    const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
     try {
       // Step 1: Describe the image to get a base prompt
       setLoadingStep('analyzing');
       const description = await describeImage(uploadedImage);
       setBasePrompt(description);
 
-      // Step 2: Generate images for different views in parallel
+      // Step 2: Generate images for different views sequentially to avoid rate limits
       setLoadingStep('generating');
-      const imagePromises = VIEW_TYPES.map(view => {
+      const newGeneratedViews: GeneratedView[] = [];
+      for (const view of VIEW_TYPES) {
+        setGeneratingProgress(`Generating: ${view}`);
         const promptView = view.toLowerCase().endsWith('view') ? view : `${view} view`;
         const prompt = `${description}, ${promptView.toLowerCase()}, detailed, cinematic lighting, 4k, trending on artstation`;
-        return generateImageView(uploadedImage, prompt);
-      });
-      
-      const results = await Promise.all(imagePromises);
+        
+        try {
+            let imageUrl: string;
+            if (selectedModel === 'edit') {
+              imageUrl = await editImageView(uploadedImage, prompt);
+            } else {
+              imageUrl = await generateImageView(prompt);
+            }
+            const newView = { view, imageUrl };
+            newGeneratedViews.push(newView);
+            setGeneratedViews([...newGeneratedViews]); // Update UI incrementally
+        } catch (viewError) {
+             console.error(`Failed to generate view for ${view}:`, viewError);
+             const message = viewError instanceof Error ? viewError.message : 'An API error occurred.';
+             setError(`Error on "${view}": ${message}. The process has been stopped.`);
+             // Stop the entire process on the first error
+             throw new Error(`Generation failed for view: ${view}`);
+        }
+        
+        // Add a 1-second delay between requests to avoid rate-limiting issues
+        await delay(1000);
+      }
 
-      const newGeneratedViews: GeneratedView[] = results.map((imageUrl, index) => ({
-        view: VIEW_TYPES[index],
-        imageUrl: imageUrl,
-      }));
-
-      setGeneratedViews(newGeneratedViews);
     } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      // The error is set in the loop, so we just log that the process was aborted.
+      if (err instanceof Error && err.message.startsWith('Generation failed')) {
+         console.log("Generation process aborted due to a view generation error.");
+      } else {
+         console.error("An unexpected error occurred:", err);
+         setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      }
     } finally {
       setIsLoading(false);
       setLoadingStep(null);
+      setGeneratingProgress(null);
     }
-  }, [uploadedImage, usedCredits, totalCredits]);
+  }, [uploadedImage, usedCredits, totalCredits, selectedModel]);
 
   const creditsDepleted = usedCredits >= totalCredits;
 
@@ -113,6 +138,11 @@ const App: React.FC = () => {
             isLoading={isLoading}
         />
         <div className="w-full max-w-2xl text-center space-y-4">
+          <ModelSelector
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            disabled={isLoading}
+          />
           <p className="text-slate-400">
             Upload an image and our AI will generate multiple 3D-style views of the main object.
           </p>
@@ -132,7 +162,7 @@ const App: React.FC = () => {
 
         {error && <div className="mt-4 p-4 bg-red-900/50 text-red-300 border border-red-700 rounded-lg">{error}</div>}
         
-        {isLoading && <Loader step={loadingStep} />}
+        {isLoading && <Loader step={loadingStep} progressMessage={generatingProgress} />}
 
         {basePrompt && !isLoading && (
             <div className="w-full max-w-4xl p-4 bg-slate-800 rounded-lg text-center">
