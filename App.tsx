@@ -77,7 +77,8 @@ const App: React.FC = () => {
       // Step 2: Generate images for different views in parallel
       setLoadingStep('generating');
       const imagePromises = VIEW_TYPES.map(view => {
-        const prompt = `${description}, ${view.toLowerCase()} view, detailed, cinematic lighting, 4k, trending on artstation`;
+        const promptView = view.toLowerCase().endsWith('view') ? view : `${view} view`;
+        const prompt = `${description}, ${promptView.toLowerCase()}, detailed, cinematic lighting, 4k, trending on artstation`;
         return generateImageView(uploadedImage, prompt);
       });
       

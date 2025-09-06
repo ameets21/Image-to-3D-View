@@ -14,7 +14,7 @@ const ImageViewCard: React.FC<{ viewData: GeneratedView }> = ({ viewData }) => {
         className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-90"
       />
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-        <h3 className="text-lg font-bold text-white drop-shadow-md">{viewData.view} View</h3>
+        <h3 className="text-lg font-bold text-white drop-shadow-md">{viewData.view}</h3>
       </div>
     </div>
   );
@@ -24,7 +24,7 @@ export const GeneratedImagesView: React.FC<GeneratedImagesViewProps> = ({ views 
   return (
     <div className="w-full max-w-7xl mt-8">
       <h2 className="text-2xl font-bold text-center mb-6 text-slate-300">Generated 3D Views</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
         {views.map((view, index) => (
           <ImageViewCard key={index} viewData={view} />
         ))}
