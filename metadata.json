@@ -1,0 +1,5 @@
+{
+  "name": "Image to 3D Views",
+  "description": "Upload an image to generate multiple 3D-style views of the main object using AI. This app analyzes your image, creates a descriptive prompt, and then generates front, side, top, and isometric views to simulate a 3D representation.",
+  "requestFramePermissions": []
+}
